@@ -1,4 +1,4 @@
 .selected-cell{background:#e2f2f7}
 .balance-start td{border-top:2px dashed #d44731!important}
-.profile-preview{position:relative}.profile-preview svg{position:absolute;left:50%;transform:translateX(-50%)}.delete{color:#9aa8ad!important;font-size:17px!important;font-weight:400!important}.y-title.unit{font-size:10px;font-weight:400}.keypoint{fill:white;stroke:currentColor;stroke-width:1.5}.line0~.keypoint{color:#176b87}.line1~.keypoint{color:#6c5ce7}
+.profile-preview{position:relative;min-height:66px}.profile-preview svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.delete{color:#9aa8ad!important;font-size:17px!important;font-weight:400!important}.y-title.unit{font-size:10px;font-weight:400}.keypoint{fill:white;stroke:currentColor;stroke-width:1.5}.line0~.keypoint{color:#176b87}.line1~.keypoint{color:#6c5ce7}
 table.sheet+small{display:none}.panel table:not(.sheet) th:nth-child(8){font-size:0}.panel table:not(.sheet) th:nth-child(8)::after{content:"本段伸长量";font-size:13px}
