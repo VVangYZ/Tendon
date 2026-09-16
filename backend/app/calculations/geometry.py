@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import acos, atan2, ceil, cos, exp, hypot, pi, sin, sqrt, tan
+from math import acos, atan2, cos, hypot, sin, sqrt, tan
 from typing import List, Sequence, Tuple, Union
 
 
@@ -164,6 +164,87 @@ class Profile:
                 raise GeometryError("相邻分段里程不连续")
             if hypot(previous.end[0] - current.start[0], previous.end[1] - current.start[1]) > 1e-8:
                 raise GeometryError("相邻分段坐标不连续")
+
+    @classmethod
+    def from_xyr_points(cls, points: Sequence[Tuple[float, float, float]]) -> "Profile":
+        """由角点及倒角半径创建线形，数据格式为 ``(x, y, r)``。
+
+        首末点的半径不参与计算；中间点半径为零时保留为直线折点。
+        """
+        if len(points) < 2:
+            raise GeometryError("x/y/r 输入至少需要两个点")
+
+        segments: List[Segment] = []
+        previous_end = (points[0][0], points[0][1])
+        for index in range(1, len(points) - 1):
+            previous = points[index - 1]
+            current = points[index]
+            following = points[index + 1]
+            radius = current[2]
+            if radius < 0:
+                raise GeometryError("倒角半径不能为负")
+
+            vector_before = (current[0] - previous[0], current[1] - previous[1])
+            vector_after = (following[0] - current[0], following[1] - current[1])
+            length_before = hypot(*vector_before)
+            length_after = hypot(*vector_after)
+            if length_before == 0 or length_after == 0:
+                raise GeometryError("相邻 x/y/r 控制点不能重合")
+            unit_before = (vector_before[0] / length_before, vector_before[1] / length_before)
+            unit_after = (vector_after[0] / length_after, vector_after[1] / length_after)
+            turn_cosine = _clamp(
+                unit_before[0] * unit_after[0] + unit_before[1] * unit_after[1],
+                -1.0,
+                1.0,
+            )
+            turn_angle = acos(turn_cosine)
+
+            if radius == 0 or turn_angle < 1e-12:
+                corner = (current[0], current[1])
+                segments.append(Line(previous_end, corner))
+                previous_end = corner
+                continue
+
+            cut_length = radius * tan(turn_angle / 2)
+            if cut_length >= length_before - 1e-9 or cut_length >= length_after - 1e-9:
+                raise GeometryError("倒角半径过大，圆弧切线长超出相邻直线段")
+            arc_start = (
+                current[0] - unit_before[0] * cut_length,
+                current[1] - unit_before[1] * cut_length,
+            )
+            arc_end = (
+                current[0] + unit_after[0] * cut_length,
+                current[1] + unit_after[1] * cut_length,
+            )
+            cross_product = unit_before[0] * unit_after[1] - unit_before[1] * unit_after[0]
+            direction = 1.0 if cross_product > 0 else -1.0
+
+            segments.append(Line(previous_end, arc_start))
+            segments.append(Arc(arc_start, arc_end, tan(direction * turn_angle / 4)))
+            previous_end = arc_end
+
+        segments.append(Line(previous_end, (points[-1][0], points[-1][1])))
+        return cls(segments)
+
+    @classmethod
+    def from_xyb_points(cls, points: Sequence[Tuple[float, float, float]]) -> "Profile":
+        """由 CAD polyline 节点创建线形，数据格式为 ``(x, y, bulge)``。
+
+        每行的 bulge 归属于“当前点到下一点”的分段；最后一行 bulge 被忽略。
+        """
+        if len(points) < 2:
+            raise GeometryError("x/y/b 输入至少需要两个点")
+
+        segments: List[Segment] = []
+        for current, following in zip(points, points[1:]):
+            start = (current[0], current[1])
+            end = (following[0], following[1])
+            bulge = current[2]
+            if bulge == 0:
+                segments.append(Line(start, end))
+            else:
+                segments.append(Arc(start, end, bulge))
+        return cls(segments)
 
     @property
     def x_start(self) -> float:

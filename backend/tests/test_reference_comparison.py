@@ -1,14 +1,11 @@
 """新内核与参考脚本的回归对比算例。"""
 
-import math
 import sys
 import unittest
 from pathlib import Path
 
 from app.calculations import (
-    Arc,
     FrictionParameters,
-    Line,
     MaterialParameters,
     Profile,
     TendonElongationCalculator,
@@ -24,38 +21,6 @@ if REFERENCE_DIRECTORY.is_dir():
     from tendon_new6_CanCutArc import Tendon, TendonCL2D  # noqa: E402
 else:
     Tendon = TendonCL2D = None
-
-
-def profile_from_xyr(points):
-    """按参考脚本相同的圆弧切点规则，将控制点和半径转为新内核线形。"""
-    segments = []
-    previous_end = (points[0][0], points[0][1])
-    for index in range(1, len(points) - 1):
-        previous = points[index - 1]
-        current = points[index]
-        following = points[index + 1]
-        radius = current[2]
-        if radius <= 0:
-            raise ValueError("中间控制点半径必须大于零")
-
-        vector_before = (current[0] - previous[0], current[1] - previous[1])
-        vector_after = (following[0] - current[0], following[1] - current[1])
-        length_before = math.hypot(*vector_before)
-        length_after = math.hypot(*vector_after)
-        unit_before = (vector_before[0] / length_before, vector_before[1] / length_before)
-        unit_after = (vector_after[0] / length_after, vector_after[1] / length_after)
-        angle = math.acos(unit_before[0] * unit_after[0] + unit_before[1] * unit_after[1])
-        cut = radius * math.tan(angle / 2)
-        arc_start = (current[0] - unit_before[0] * cut, current[1] - unit_before[1] * cut)
-        arc_end = (current[0] + unit_after[0] * cut, current[1] + unit_after[1] * cut)
-        direction = 1 if unit_after[1] > unit_before[1] else -1
-
-        segments.append(Line(previous_end, arc_start))
-        segments.append(Arc(arc_start, arc_end, math.tan(angle * direction / 4)))
-        previous_end = arc_end
-
-    segments.append(Line(previous_end, (points[-1][0], points[-1][1])))
-    return Profile(segments)
 
 
 ELEVATION_POINTS = [
@@ -108,8 +73,8 @@ def calculate_current_case(
 ):
     """运行与参考算例参数一致的新内核计算。"""
     geometry = TendonGeometry(
-        elevation=profile_from_xyr(elevation_points),
-        plan=profile_from_xyr(plan_points),
+        elevation=Profile.from_xyr_points(elevation_points),
+        plan=Profile.from_xyr_points(plan_points),
     )
     return TendonElongationCalculator(
         geometry=geometry,
