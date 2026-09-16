@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from math import exp
 from typing import List, Optional, Tuple
 
-from .geometry import GeometryError, TendonGeometry, _simpson
+from .geometry import TendonGeometry
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,15 @@ class CalculationResult:
     segments: Tuple[SegmentResult, ...]
 
 
+@dataclass(frozen=True)
+class _PathNode:
+    """路径离散点：保存从左端累计的长度和角变位。"""
+
+    x: float
+    length: float
+    turn: float
+
+
 class TendonElongationCalculator:
     """计算即时理论伸长量，不包含锚具回缩、弹性压缩和时变损失。"""
 
@@ -84,15 +94,59 @@ class TendonElongationCalculator:
         self.geometry = geometry
         self.friction = friction
         self.material = material
+        # 每个原始几何分段划分为 4 个小段；该路径表供后续全部应力和伸长量查询复用。
+        self._path_nodes = self._build_path_nodes(subdivisions_per_interval=4)
+        self._path_xs = tuple(node.x for node in self._path_nodes)
+
+    def _build_path_nodes(self, subdivisions_per_interval: int) -> Tuple[_PathNode, ...]:
+        """预计算里程、累计长度和累计转角，避免伸长量积分中的嵌套几何积分。"""
+        breakpoints = self.geometry.breakpoints_between(self.geometry.x_start, self.geometry.x_end)
+        nodes = [_PathNode(x=breakpoints[0], length=0.0, turn=0.0)]
+        accumulated_length = 0.0
+        accumulated_turn = 0.0
+
+        for left, right in zip(breakpoints, breakpoints[1:]):
+            previous_x = left
+            for index in range(1, subdivisions_per_interval + 1):
+                current_x = left + (right - left) * index / subdivisions_per_interval
+                accumulated_length += self.geometry.length_between(previous_x, current_x)
+                accumulated_turn += self.geometry.turn_between(previous_x, current_x)
+                nodes.append(_PathNode(current_x, accumulated_length, accumulated_turn))
+                previous_x = current_x
+        return tuple(nodes)
+
+    def _path_at(self, x: float) -> Tuple[float, float]:
+        """从路径表线性插值得到指定里程的累计长度和累计转角。"""
+        first, last = self._path_nodes[0], self._path_nodes[-1]
+        if x < first.x - 1e-9 or x > last.x + 1e-9:
+            raise ValueError("查询里程超出钢束范围")
+        if x <= first.x:
+            return first.length, first.turn
+        if x >= last.x:
+            return last.length, last.turn
+
+        right_index = bisect_right(self._path_xs, x)
+        left_node = self._path_nodes[right_index - 1]
+        right_node = self._path_nodes[right_index]
+        ratio = (x - left_node.x) / (right_node.x - left_node.x)
+        length = left_node.length + ratio * (right_node.length - left_node.length)
+        turn = left_node.turn + ratio * (right_node.turn - left_node.turn)
+        return length, turn
+
+    def _sample_xs_between(self, x1: float, x2: float) -> Tuple[float, ...]:
+        """返回区间端点及内部路径表节点，供分段积分复用。"""
+        start_index = bisect_right(self._path_xs, x1)
+        end_index = bisect_right(self._path_xs, x2)
+        return (x1,) + self._path_xs[start_index:end_index] + (x2,)
 
     def stress_from_left(self, x: float, stress: float) -> float:
-        length = self.geometry.length_between(self.geometry.x_start, x)
-        turn = self.geometry.turn_between(self.geometry.x_start, x)
+        length, turn = self._path_at(x)
         return stress * exp(-(self.friction.k * length + self.friction.mu * turn))
 
     def stress_from_right(self, x: float, stress: float) -> float:
-        length = self.geometry.length_between(x, self.geometry.x_end)
-        turn = self.geometry.turn_between(x, self.geometry.x_end)
+        length_from_left, turn_from_left = self._path_at(x)
+        length = self._path_nodes[-1].length - length_from_left
+        turn = self._path_nodes[-1].turn - turn_from_left
         return stress * exp(-(self.friction.k * length + self.friction.mu * turn))
 
     def _balance_x(self, case: TensioningCase) -> Optional[float]:
@@ -118,17 +172,24 @@ class TendonElongationCalculator:
         return (left + right) / 2
 
     def _elongation_from(self, x1: float, x2: float, source: str, stress: float) -> float:
-        def integrand(x: float) -> float:
-            unit_tangent = self.geometry.tangent_at(x)
-            length_per_x = 1 / unit_tangent[0]
+        """沿缓存路径以辛普森公式积分应力应变，避免在积分点重复求几何量。"""
+        elongation = 0.0
+        points = self._sample_xs_between(x1, x2)
+        for left, right in zip(points, points[1:]):
+            left_length, _ = self._path_at(left)
+            right_length, _ = self._path_at(right)
+            delta_length = right_length - left_length
+            middle = (left + right) / 2
             if source == "left":
-                current_stress = self.stress_from_left(x, stress)
+                left_stress = self.stress_from_left(left, stress)
+                middle_stress = self.stress_from_left(middle, stress)
+                right_stress = self.stress_from_left(right, stress)
             else:
-                current_stress = self.stress_from_right(x, stress)
-            return current_stress / self.material.elastic_modulus * length_per_x
-
-        points = self.geometry.breakpoints_between(x1, x2)
-        return sum(_simpson(integrand, left, right) for left, right in zip(points, points[1:]))
+                left_stress = self.stress_from_right(left, stress)
+                middle_stress = self.stress_from_right(middle, stress)
+                right_stress = self.stress_from_right(right, stress)
+            elongation += delta_length * (left_stress + 4 * middle_stress + right_stress) / (6 * self.material.elastic_modulus)
+        return elongation
 
     def calculate(self, case: TensioningCase) -> CalculationResult:
         """计算理论伸长量，并返回可导出至计算书的分段成果。"""
@@ -158,12 +219,14 @@ class TendonElongationCalculator:
             points = self.geometry.breakpoints_between(range_start, range_end)
             for segment_start, segment_end in zip(points, points[1:]):
                 elongation = self._elongation_from(segment_start, segment_end, source, stress)
-                length = self.geometry.length_between(segment_start, segment_end)
+                start_length, start_turn = self._path_at(segment_start)
+                end_length, end_turn = self._path_at(segment_end)
+                length = end_length - start_length
                 segments.append(SegmentResult(
                     x_start=segment_start,
                     x_end=segment_end,
                     length=length,
-                    turn=self.geometry.turn_between(segment_start, segment_end),
+                    turn=end_turn - start_turn,
                     average_stress=elongation * self.material.elastic_modulus / length,
                     elongation=elongation,
                     source=source,
@@ -174,8 +237,8 @@ class TendonElongationCalculator:
                     right_elongation += elongation
 
         return CalculationResult(
-            total_length=self.geometry.length_between(x_start, x_end),
-            total_turn=self.geometry.turn_between(x_start, x_end),
+            total_length=self._path_nodes[-1].length,
+            total_turn=self._path_nodes[-1].turn,
             total_elongation=left_elongation + right_elongation,
             left_elongation=left_elongation,
             right_elongation=right_elongation,
