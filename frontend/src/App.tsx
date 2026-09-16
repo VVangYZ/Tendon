@@ -1,6 +1,7 @@
 import { useState, type ClipboardEvent, type MouseEvent } from "react";
 import type { CalculationResult, ProfileInput } from "./types";
 import Chart from "./Chart";
+import { rememberProfile } from "./chartProfiles";
 
 const elevation: ProfileInput={mode:"xyr",points:[[0,0,0],[5.191,-1.294,10],[27.647,-1.294,10],[32.273,-.141,10],[42.729,-.141,10],[47.355,-1.294,10],[69.811,-1.294,10],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
 const plan: ProfileInput={mode:"xyr",points:[[0,0,0],[25,3.4613,100],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
@@ -8,6 +9,7 @@ const fmt=(n:number,d=3)=>Number.isFinite(n)?n.toFixed(d):"—";
 const fields=["x","y","value"] as const;
 
 function Editor({title,value,onChange}:{title:string;value:ProfileInput;onChange:(x:ProfileInput)=>void}){
+ rememberProfile(title,value);
  const [active,setActive]=useState({row:0,column:0}),[anchor,setAnchor]=useState({row:0,column:0});
  const selected=(row:number,column:number)=>row>=Math.min(anchor.row,active.row)&&row<=Math.max(anchor.row,active.row)&&column>=Math.min(anchor.column,active.column)&&column<=Math.max(anchor.column,active.column);
  const set=(i:number,k:typeof fields[number],v:string)=>onChange({...value,points:value.points.map((p,j)=>j===i?{...p,[k]:Number(v)}:p)});
