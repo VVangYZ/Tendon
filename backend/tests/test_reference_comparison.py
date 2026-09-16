@@ -58,46 +58,58 @@ def profile_from_xyr(points):
     return Profile(segments)
 
 
+ELEVATION_POINTS = [
+    (0.0, 0.0, 0.0),
+    (5.191, -1.294, 10.0),
+    (27.647, -1.294, 10.0),
+    (32.273, -0.141, 10.0),
+    (42.729, -0.141, 10.0),
+    (47.355, -1.294, 10.0),
+    (69.811, -1.294, 10.0),
+    (75.0, 0.0, 0.0),
+]
+PLAN_POINTS = [
+    (0.0, 0.0, 0.0),
+    (37.5, 3.4613, 407.99),
+    (75.0, 0.0, 0.0),
+]
+
+
+def calculate_reference_case():
+    """运行参考脚本中的组合曲线算例。"""
+    if Tendon is None or TendonCL2D is None:
+        raise RuntimeError("未找到 ref 目录中的参考脚本")
+    elevation = TendonCL2D.from_xyr_lst(ELEVATION_POINTS)
+    plan = TendonCL2D.from_xyr_lst(PLAN_POINTS)
+    reference = Tendon(elevation, plan, k=0.0015, mu=0.25, tendon_e=190000.0)
+    stresses = reference.get_ctrl_pts_pp()
+    segments = reference.get_segments_dl(stresses)
+    return reference.length, reference.get_end_dl(stresses, segments)
+
+
+def calculate_current_case():
+    """运行与参考算例参数一致的新内核计算。"""
+    geometry = TendonGeometry(
+        elevation=profile_from_xyr(ELEVATION_POINTS),
+        plan=profile_from_xyr(PLAN_POINTS),
+    )
+    return TendonElongationCalculator(
+        geometry=geometry,
+        friction=FrictionParameters(k=0.0015, mu=0.25),
+        material=MaterialParameters(elastic_modulus=190000.0),
+    ).calculate(TensioningCase(left_stress=1395.0, right_stress=1395.0))
+
+
 class ReferenceComparisonTest(unittest.TestCase):
     def test_combined_vertical_and_plan_curves(self) -> None:
         """参考脚本注释中的组合曲线算例，应与新内核结果接近。"""
         if Tendon is None or TendonCL2D is None:
             self.skipTest("未找到 ref 目录中的参考脚本")
-        elevation_points = [
-            (0.0, 0.0, 0.0),
-            (5.191, -1.294, 10.0),
-            (27.647, -1.294, 10.0),
-            (32.273, -0.141, 10.0),
-            (42.729, -0.141, 10.0),
-            (47.355, -1.294, 10.0),
-            (69.811, -1.294, 10.0),
-            (75.0, 0.0, 0.0),
-        ]
-        plan_points = [
-            (0.0, 0.0, 0.0),
-            (37.5, 3.4613, 407.99),
-            (75.0, 0.0, 0.0),
-        ]
-
-        reference_elevation = TendonCL2D.from_xyr_lst(elevation_points)
-        reference_plan = TendonCL2D.from_xyr_lst(plan_points)
-        reference = Tendon(reference_elevation, reference_plan, k=0.0015, mu=0.25, tendon_e=190000.0)
-        reference_stresses = reference.get_ctrl_pts_pp()
-        reference_segments = reference.get_segments_dl(reference_stresses)
-        reference_left, reference_right, reference_total = reference.get_end_dl(reference_stresses, reference_segments)
-
-        geometry = TendonGeometry(
-            elevation=profile_from_xyr(elevation_points),
-            plan=profile_from_xyr(plan_points),
-        )
-        current = TendonElongationCalculator(
-            geometry=geometry,
-            friction=FrictionParameters(k=0.0015, mu=0.25),
-            material=MaterialParameters(elastic_modulus=190000.0),
-        ).calculate(TensioningCase(left_stress=1395.0, right_stress=1395.0))
+        reference_length, (reference_left, reference_right, reference_total) = calculate_reference_case()
+        current = calculate_current_case()
 
         # 两种实现的空间几何离散方式不同，因此以工程计算可接受的相对差比较。
-        self.assertAlmostEqual(current.total_length, reference.length, delta=0.02)
+        self.assertAlmostEqual(current.total_length, reference_length, delta=0.02)
         self.assertAlmostEqual(current.total_elongation, reference_total, delta=0.0002)
         self.assertAlmostEqual(current.left_elongation, reference_left, delta=0.0002)
         self.assertAlmostEqual(current.right_elongation, reference_right, delta=0.0002)
