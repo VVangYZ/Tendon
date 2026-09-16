@@ -8,3 +8,7 @@ __pycache__/
 # Python 构建产物
 build/
 *.egg-info/
+
+# IDE 本地项目配置
+.idea/
+.vscode/
