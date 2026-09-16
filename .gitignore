@@ -1,0 +1,10 @@
+# 本机 Python 虚拟环境
+.venv/
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+
+# Python 构建产物
+build/
+*.egg-info/

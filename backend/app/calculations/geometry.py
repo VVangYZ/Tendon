@@ -25,7 +25,7 @@ def _unit(vector: Sequence[float]) -> Tuple[float, ...]:
     return tuple(component / length for component in vector)
 
 
-def _simpson(function, left: float, right: float, subdivisions: int = 64) -> float:
+def _simpson(function, left: float, right: float, subdivisions: int = 16) -> float:
     """采用复合辛普森公式进行数值积分。"""
     if right == left:
         return 0.0
@@ -231,7 +231,7 @@ class TendonGeometry:
         points = self.breakpoints_between(x1, x2)
         return sum(_simpson(metric, left, right) for left, right in zip(points, points[1:]))
 
-    def turn_between(self, x1: float, x2: float, samples_per_interval: int = 64) -> float:
+    def turn_between(self, x1: float, x2: float, samples_per_interval: int = 16) -> float:
         """通过空间切向量离散累计绝对转角，返回弧度。"""
         if x2 < x1:
             raise GeometryError("终止里程不能小于起始里程")
