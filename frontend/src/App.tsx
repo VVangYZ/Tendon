@@ -1,5 +1,6 @@
 import { useState, type ClipboardEvent, type MouseEvent } from "react";
 import type { CalculationResult, ProfileInput } from "./types";
+import Chart from "./Chart";
 
 const elevation: ProfileInput={mode:"xyr",points:[[0,0,0],[5.191,-1.294,10],[27.647,-1.294,10],[32.273,-.141,10],[42.729,-.141,10],[47.355,-1.294,10],[69.811,-1.294,10],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
 const plan: ProfileInput={mode:"xyr",points:[[0,0,0],[25,3.4613,100],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
@@ -15,7 +16,7 @@ function Editor({title,value,onChange}:{title:string;value:ProfileInput;onChange
  return <section className="panel"><div className="head"><div><h2>{title}</h2><small>{value.mode==="xyr"?"角点 + 倒角半径":"CAD 节点 + bulge；b 属于当前点到下一点"}</small></div><select value={value.mode} onChange={e=>onChange({...value,mode:e.target.value as "xyr"|"xyb"})}><option value="xyr">x / y / r</option><option value="xyb">x / y / b</option></select></div><div className="profile-preview"><span>线形预览</span><svg viewBox="0 0 180 58"><polyline points={value.points.map(p=>`${px(p.x)},${py(p.y)}`).join(" ")}/>{value.points.map((p,i)=><circle key={i} cx={px(p.x)} cy={py(p.y)} r="2.5"/>)}</svg></div><table className="sheet" onPaste={paste}><thead><tr><th>#</th><th>x (m)</th><th>y (m)</th><th>{value.mode==="xyr"?"r (m)":"b"}</th><th/></tr></thead><tbody>{value.points.map((p,i)=><tr key={i}><td>{i+1}</td>{fields.map((key,column)=><td key={key}><input className={`input-cell ${selected(i,column)?"selected-cell":""}`} type="text" inputMode="decimal" data-row={i} data-column={column} value={p[key]} onMouseDown={event=>{if(!event.shiftKey)setAnchor({row:i,column});setActive({row:i,column})}} onMouseEnter={event=>event.buttons===1&&setActive({row:i,column})} onFocus={()=>setActive({row:i,column})} onChange={e=>set(i,key,e.target.value)}/></td>)}<td><button className="delete" aria-label="删除该节点" onClick={()=>value.points.length>2&&onChange({...value,points:value.points.filter((_,j)=>j!==i)})}>×</button></td></tr>)}</tbody></table><small>单击单元格后，可从 Excel 粘贴任意行、列；仅在行数不足时自动增加节点。拖动或 Shift 点击可框选范围。</small><button onClick={()=>onChange({...value,points:[...value.points,{...value.points.at(-1)!,x:value.points.at(-1)!.x+5,value:0}]})}>+ 添加节点</button></section>
 }
 
-function Chart({result}:{result:CalculationResult}){
+function LegacyChart({result}:{result:CalculationResult}){
  const [tip,setTip]=useState<{x:number;y:number;i:number}|null>(null),d=result.distribution,w=920,h=150,l=88,r=25,x0=d[0].x,x1=d.at(-1)!.x,sx=(x:number)=>l+(x-x0)/(x1-x0)*(w-l-r);
  const rows:[keyof typeof d[number],string,string][]=[["plan_y","平面 y","m"],["elevation_y","立面 y","m"],["stress","应力","MPa"],["elongation_mm","累计伸长量","mm"]];
  const hover=(e:MouseEvent<SVGRectElement>)=>{const box=e.currentTarget.ownerSVGElement!.getBoundingClientRect(),plotLeft=box.width*l/w,plotWidth=box.width*(w-l-r)/w,x=x0+Math.max(0,Math.min(1,(e.clientX-box.left-plotLeft)/plotWidth))*(x1-x0),i=d.reduce((best,p,index)=>Math.abs(p.x-x)<Math.abs(d[best].x-x)?index:best,0);setTip({x:e.clientX-box.left,y:e.clientY-box.top,i})};
