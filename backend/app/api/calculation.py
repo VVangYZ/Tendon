@@ -43,7 +43,11 @@ def calculate_tendon(request: CalculationRequest) -> CalculationResponse:
             friction=FrictionParameters(k=request.k, mu=request.mu),
             material=MaterialParameters(elastic_modulus=request.elastic_modulus),
         )
-        case = TensioningCase(left_stress=request.left_stress, right_stress=request.right_stress)
+        # 网页中以 0 表示该端不参与张拉，转换为计算内核使用的 None。
+        case = TensioningCase(
+            left_stress=request.left_stress if request.left_stress not in (None, 0) else None,
+            right_stress=request.right_stress if request.right_stress not in (None, 0) else None,
+        )
         result = calculator.calculate(case)
         distribution = calculator.sample_distribution(case, result=result, count=121)
     except (GeometryError, ValueError) as error:

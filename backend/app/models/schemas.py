@@ -28,8 +28,8 @@ class CalculationRequest(BaseModel):
     k: float = Field(default=0.0015, ge=0)
     mu: float = Field(default=0.25, ge=0)
     elastic_modulus: float = Field(default=195000.0, gt=0)
-    left_stress: float = Field(default=1395.0, gt=0)
-    right_stress: Optional[float] = Field(default=1395.0, gt=0)
+    left_stress: Optional[float] = Field(default=1395.0, ge=0)
+    right_stress: Optional[float] = Field(default=1395.0, ge=0)
 
 
 class DistributionPoint(BaseModel):
