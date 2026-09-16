@@ -5,7 +5,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass
 from math import exp
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .geometry import TendonGeometry
 
@@ -245,3 +245,69 @@ class TendonElongationCalculator:
             balance_x=balance_x,
             segments=tuple(segments),
         )
+
+    def sample_distribution(
+        self,
+        case: TensioningCase,
+        result: Optional[CalculationResult] = None,
+        count: int = 121,
+    ) -> List[Dict[str, float]]:
+        """生成四联图数据，伸长量以不动点为零并向两端累计。"""
+        if count < 2:
+            raise ValueError("图形采样点数量至少为两个")
+        result = result or self.calculate(case)
+        x_start, x_end = self.geometry.x_start, self.geometry.x_end
+        sample_xs = {
+            x_start + (x_end - x_start) * index / (count - 1)
+            for index in range(count)
+        }
+        sample_xs.update(self.geometry.breakpoints_between(x_start, x_end))
+        if result.balance_x is not None:
+            sample_xs.add(result.balance_x)
+
+        distribution: List[Dict[str, float]] = []
+        for x in sorted(sample_xs):
+            stress, elongation_mm = self._distribution_values(x, case, result.balance_x)
+            distribution.append({
+                "x": x,
+                "plan_y": self.geometry.plan.point_at(x)[1],
+                "elevation_y": self.geometry.elevation.point_at(x)[1],
+                "stress": stress,
+                "elongation_mm": elongation_mm,
+            })
+        return distribution
+
+    def _distribution_values(
+        self,
+        x: float,
+        case: TensioningCase,
+        balance_x: Optional[float],
+    ) -> Tuple[float, float]:
+        """计算单个图形采样点的应力与相对不动点累计伸长量。"""
+        if balance_x is not None:
+            assert case.left_stress is not None and case.right_stress is not None
+            if x <= balance_x:
+                stress = self.stress_from_left(x, case.left_stress)
+                elongation = self._elongation_from(x, balance_x, "left", case.left_stress)
+            else:
+                stress = self.stress_from_right(x, case.right_stress)
+                elongation = self._elongation_from(balance_x, x, "right", case.right_stress)
+            return stress, elongation * 1000
+
+        if case.left_stress is not None and case.right_stress is None:
+            return (
+                self.stress_from_left(x, case.left_stress),
+                self._elongation_from(x, self.geometry.x_end, "left", case.left_stress) * 1000,
+            )
+        if case.right_stress is not None and case.left_stress is None:
+            return (
+                self.stress_from_right(x, case.right_stress),
+                self._elongation_from(self.geometry.x_start, x, "right", case.right_stress) * 1000,
+            )
+
+        assert case.left_stress is not None and case.right_stress is not None
+        left_stress = self.stress_from_left(x, case.left_stress)
+        right_stress = self.stress_from_right(x, case.right_stress)
+        if left_stress >= right_stress:
+            return left_stress, self._elongation_from(x, self.geometry.x_end, "left", case.left_stress) * 1000
+        return right_stress, self._elongation_from(self.geometry.x_start, x, "right", case.right_stress) * 1000
