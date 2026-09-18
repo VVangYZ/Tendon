@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from io import StringIO
+from io import BytesIO, StringIO
+import re
 
 import ezdxf
-from ezdxf.filemanagement import dxf_stream_info
+from ezdxf import recover
 from ezdxf.lldxf.const import DXFError
+from ezdxf.tools.codepage import toencoding
 
 
 LAYER_ELEVATION = "立面"
@@ -61,13 +63,31 @@ def _unit_scale(unit: str) -> float:
 
 
 def _read_document(content: bytes):
-    """在内存中按 DXF 头部声明的编码读取图纸，避免上传文件落盘。"""
+    """在内存中读取图纸；常规读取失败时自动尝试 DXF 修复模式。"""
     try:
-        header_text = content.decode("utf-8-sig", errors="surrogateescape")
-        encoding = dxf_stream_info(StringIO(header_text)).encoding
-        return ezdxf.read(StringIO(content.decode(encoding, errors="surrogateescape")))
+        text = content.decode(_declared_encoding(content), errors="surrogateescape")
+        try:
+            return ezdxf.read(StringIO(text))
+        except DXFError:
+            # 修复模式可跳过图纸扩展数据中的异常二进制记录。
+            document, _ = recover.read(BytesIO(text.encode("utf-8", errors="surrogateescape")))
+            return document
     except (OSError, DXFError, UnicodeError) as error:
         raise DxfImportError("无法读取 DXF 文件，请确认文件未损坏且格式正确") from error
+
+
+def _declared_encoding(content: bytes) -> str:
+    """优先遵从 DXF 头声明的代码页，兼容旧版 CAD 的中文图层名。"""
+    try:
+        content.decode("utf-8")
+        return "utf-8"
+    except UnicodeDecodeError:
+        pass
+    match = re.search(rb"\$DWGCODEPAGE\s+3\s+([^\r\n]+)", content[:8192])
+    if not match:
+        return "utf-8"
+    codepage = match.group(1).decode("ascii", errors="ignore").strip()
+    return toencoding(codepage)
 
 
 def _read_layer_polyline(modelspace, layer: str, scale: float) -> list[tuple[float, float, float]]:
@@ -85,7 +105,8 @@ def _read_layer_polyline(modelspace, layer: str, scale: float) -> list[tuple[flo
     polyline = polylines[0]
     if polyline.dxftype() == "POLYLINE" and not polyline.is_2d_polyline:
         raise DxfImportError(f"图层“{layer}”仅支持二维多段线")
-    if polyline.closed:
+    is_closed = polyline.closed if polyline.dxftype() == "LWPOLYLINE" else polyline.is_closed
+    if is_closed:
         raise DxfImportError(f"图层“{layer}”的多段线必须为非闭合线")
 
     points = _extract_points(polyline, scale)

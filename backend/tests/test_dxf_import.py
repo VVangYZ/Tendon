@@ -21,6 +21,20 @@ def create_dxf(layers: dict[str, list[list[tuple[float, float, float]]]]) -> byt
 
 
 class DxfImportTest(unittest.TestCase):
+    def test_import_accepts_legacy_2d_polyline(self) -> None:
+        """旧式二维 POLYLINE 也应按同一约定导入。"""
+        document = ezdxf.new("R2010")
+        modelspace = document.modelspace()
+        modelspace.add_polyline2d([(0, 0), (2, 0)], dxfattribs={"layer": "立面"})
+        modelspace.add_polyline2d([(0, 1), (2, 1)], dxfattribs={"layer": "平面"})
+        stream = StringIO()
+        document.write(stream)
+
+        result = import_dxf_profiles(stream.getvalue().encode("utf-8"), "m")
+
+        self.assertEqual(result.elevation.points, [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)])
+        self.assertEqual(result.plan.points, [(0.0, 1.0, 0.0), (2.0, 1.0, 0.0)])
+
     def test_import_converts_mm_and_reverses_bulge(self) -> None:
         """导入应换算单位，并在反向时正确处理 bulge。"""
         content = create_dxf(
