@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from io import StringIO
 
 import ezdxf
+from ezdxf.filemanagement import dxf_stream_info
 from ezdxf.lldxf.const import DXFError
 
 
@@ -60,9 +61,11 @@ def _unit_scale(unit: str) -> float:
 
 
 def _read_document(content: bytes):
-    """直接在内存中读取 UTF-8 DXF，避免将上传图纸落盘。"""
+    """在内存中按 DXF 头部声明的编码读取图纸，避免上传文件落盘。"""
     try:
-        return ezdxf.read(StringIO(content.decode("utf-8-sig", errors="surrogateescape")))
+        header_text = content.decode("utf-8-sig", errors="surrogateescape")
+        encoding = dxf_stream_info(StringIO(header_text)).encoding
+        return ezdxf.read(StringIO(content.decode(encoding, errors="surrogateescape")))
     except (OSError, DXFError, UnicodeError) as error:
         raise DxfImportError("无法读取 DXF 文件，请确认文件未损坏且格式正确") from error
 
