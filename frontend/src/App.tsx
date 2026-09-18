@@ -1,4 +1,4 @@
-import { useState, type ClipboardEvent, type MouseEvent } from "react";
+import { useEffect, useState, type ClipboardEvent, type MouseEvent } from "react";
 import type { CalculationResult, ProfileInput } from "./types";
 import Chart from "./Chart";
 import { rememberProfile } from "./chartProfiles";
@@ -7,16 +7,47 @@ const elevation: ProfileInput={mode:"xyr",points:[[0,0,0],[5.191,-1.294,10],[27.
 const plan: ProfileInput={mode:"xyr",points:[[0,0,0],[25,3.4613,100],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
 const fmt=(n:number,d=3)=>Number.isFinite(n)?n.toFixed(d):"—";
 const fields=["x","y","value"] as const;
-const rounded=(value:number,digits:number)=>Number(value.toFixed(digits));
 
-function Editor({title,value,onChange}:{title:string;value:ProfileInput;onChange:(x:ProfileInput)=>void}){
+function LegacyEditor({title,value,onChange}:{title:string;value:ProfileInput;onChange:(x:ProfileInput)=>void}){
  rememberProfile(title,value);
  const [active,setActive]=useState({row:0,column:0}),[anchor,setAnchor]=useState({row:0,column:0});
  const selected=(row:number,column:number)=>row>=Math.min(anchor.row,active.row)&&row<=Math.max(anchor.row,active.row)&&column>=Math.min(anchor.column,active.column)&&column<=Math.max(anchor.column,active.column);
  const set=(i:number,k:typeof fields[number],v:string)=>onChange({...value,points:value.points.map((p,j)=>j===i?{...p,[k]:Number(v)}:p)});
- const paste=(event:ClipboardEvent<HTMLTableElement>)=>{const rows=event.clipboardData.getData("text").replace(/\r/g,"").split("\n").filter(Boolean).map(row=>row.split(/\t|,/).map(cell=>cell.trim()));if(!rows.length)return;event.preventDefault();const focus=document.activeElement as HTMLInputElement|null,startRow=Number(focus?.dataset.row??active.row),startColumn=Number(focus?.dataset.column??active.column),points=value.points.map(p=>({...p}));while(points.length<startRow+rows.length){const last=points.at(-1)!;points.push({...last,x:last.x+5,value:0})}rows.forEach((row,ri)=>row.forEach((cell,ci)=>{const col=startColumn+ci,n=Number(cell),digits=value.mode==="xyb"&&col===2?6:3;if(col<3&&cell!==""&&Number.isFinite(n))points[startRow+ri][fields[col]]=rounded(n,digits)}));onChange({...value,points})};
+ const paste=(event:ClipboardEvent<HTMLTableElement>)=>{const rows=event.clipboardData.getData("text").replace(/\r/g,"").split("\n").filter(Boolean).map(row=>row.split(/\t|,/).map(cell=>cell.trim()));if(!rows.length)return;event.preventDefault();const focus=document.activeElement as HTMLInputElement|null,startRow=Number(focus?.dataset.row??active.row),startColumn=Number(focus?.dataset.column??active.column),points=value.points.map(p=>({...p}));while(points.length<startRow+rows.length)points.push({x:0,y:0,value:0});rows.forEach((row,ri)=>row.forEach((cell,ci)=>{const col=startColumn+ci,n=Number(cell);if(col<3&&cell!==""&&Number.isFinite(n))points[startRow+ri][fields[col]]=n}));onChange({...value,points})};
  const xs=value.points.map(p=>p.x),ys=value.points.map(p=>p.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),px=(x:number)=>8+(x-minX)/(maxX-minX||1)*164,py=(y:number)=>48-(y-minY)/(maxY-minY||1)*40;
  return <section className="panel"><div className="head"><div><h2>{title}</h2><small>{value.mode==="xyr"?"角点 + 倒角半径":"CAD 节点 + bulge；b 属于当前点到下一点"}</small></div><select value={value.mode} onChange={e=>onChange({...value,mode:e.target.value as "xyr"|"xyb"})}><option value="xyr">x / y / r</option><option value="xyb">x / y / b</option></select></div><div className="profile-preview"><span>线形预览</span><svg viewBox="0 0 180 58"><polyline points={value.points.map(p=>`${px(p.x)},${py(p.y)}`).join(" ")}/>{value.points.map((p,i)=><circle key={i} cx={px(p.x)} cy={py(p.y)} r="2.5"/>)}</svg></div><table className="sheet" onPaste={paste}><thead><tr><th>#</th><th>x (m)</th><th>y (m)</th><th>{value.mode==="xyr"?"r (m)":"b"}</th><th/></tr></thead><tbody>{value.points.map((p,i)=><tr key={i}><td>{i+1}</td>{fields.map((key,column)=><td key={key}><input className={`input-cell ${selected(i,column)?"selected-cell":""}`} type="text" inputMode="decimal" data-row={i} data-column={column} value={p[key]} onMouseDown={event=>{if(!event.shiftKey)setAnchor({row:i,column});setActive({row:i,column})}} onMouseEnter={event=>event.buttons===1&&setActive({row:i,column})} onFocus={()=>setActive({row:i,column})} onChange={e=>set(i,key,e.target.value)}/></td>)}<td><button className="delete" aria-label="删除该节点" onClick={()=>value.points.length>2&&onChange({...value,points:value.points.filter((_,j)=>j!==i)})}>×</button></td></tr>)}</tbody></table><small>单击单元格后，可从 Excel 粘贴任意行、列；仅在行数不足时自动增加节点。拖动或 Shift 点击可框选范围。</small><button onClick={()=>onChange({...value,points:[...value.points,{...value.points.at(-1)!,x:value.points.at(-1)!.x+5,value:0}]})}>+ 添加节点</button></section>
+}
+
+function ProfileCell({value,row,column,onValue}:{value:number;row:number;column:number;onValue:(value:number)=>void}){
+ const [text,setText]=useState(()=>value.toFixed(3)),[editing,setEditing]=useState(false);
+ useEffect(()=>{if(!editing)setText(value.toFixed(3))},[value,editing]);
+ return <input className="input-cell" type="text" inputMode="decimal" data-row={row} data-column={column} value={text} onFocus={()=>{setEditing(true);setText(String(value))}} onChange={event=>{const next=event.target.value,numberValue=Number(next);setText(next);if(next!==""&&Number.isFinite(numberValue))onValue(numberValue)}} onBlur={()=>{setEditing(false);if(text===""||!Number.isFinite(Number(text)))onValue(0)}}/>;
+}
+
+function Editor({title,value,onChange}:{title:string;value:ProfileInput;onChange:(x:ProfileInput)=>void}){
+ rememberProfile(title,value);
+ const set=(index:number,key:typeof fields[number],raw:string)=>{
+  const numberValue=Number(raw);
+  onChange({...value,points:value.points.map((point,i)=>i===index?{...point,[key]:Number.isFinite(numberValue)?numberValue:0}:point)});
+ };
+ const paste=(event:ClipboardEvent<HTMLTableElement>)=>{
+  const rows=event.clipboardData.getData("text").replace(/\r/g,"").split("\n").filter(Boolean).map(row=>row.split(/\t|,/).map(cell=>cell.trim()));
+  if(!rows.length)return;
+  event.preventDefault();
+  const focus=document.activeElement as HTMLInputElement|null;
+  const startRow=Number(focus?.dataset.row??0),startColumn=Number(focus?.dataset.column??0);
+  const points=value.points.map(point=>({...point}));
+  while(points.length<startRow+rows.length)points.push({x:0,y:0,value:0});
+  rows.forEach((row,rowIndex)=>row.forEach((cell,columnIndex)=>{
+   const column=startColumn+columnIndex,numberValue=Number(cell);
+   if(column<fields.length&&cell!==""&&Number.isFinite(numberValue))points[startRow+rowIndex][fields[column]]=numberValue;
+  }));
+  onChange({...value,points});
+ };
+ const xs=value.points.map(point=>point.x),ys=value.points.map(point=>point.y);
+ const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+ const px=(x:number)=>8+(x-minX)/(maxX-minX||1)*164,py=(y:number)=>48-(y-minY)/(maxY-minY||1)*40;
+ return <section className="panel"><div className="head"><div><h2>{title}</h2><small>{value.mode==="xyr"?"角点 + 倒角半径":"CAD 节点 + bulge；b 属于当前点到下一点"}</small></div><select value={value.mode} onChange={event=>onChange({...value,mode:event.target.value as "xyr"|"xyb"})}><option value="xyr">x / y / r</option><option value="xyb">x / y / b</option></select></div><div className="profile-preview"><span>线形预览</span><svg viewBox="0 0 180 58"><polyline points={value.points.map(point=>`${px(point.x)},${py(point.y)}`).join(" ")}/>{value.points.map((point,index)=><circle key={index} cx={px(point.x)} cy={py(point.y)} r="2.5"/>)}</svg></div><table className="sheet" onPaste={paste}><thead><tr><th>#</th><th>x (m)</th><th>y (m)</th><th>{value.mode==="xyr"?"r (m)":"b"}</th><th/></tr></thead><tbody>{value.points.map((point,index)=><tr key={index}><td>{index+1}</td>{fields.map((key,column)=><td key={key}><ProfileCell value={point[key]} row={index} column={column} onValue={numberValue=>set(index,key,String(numberValue))}/></td>)}<td><button className="delete" aria-label="删除该节点" onClick={()=>value.points.length>1&&onChange({...value,points:value.points.filter((_,i)=>i!==index)})}>×</button></td></tr>)}</tbody></table><div className="table-actions"><button className="clear" onClick={()=>onChange({...value,points:[{x:0,y:0,value:0}]})}>一键清空</button><button onClick={()=>onChange({...value,points:[...value.points,{x:0,y:0,value:0}]})}>+ 添加节点</button></div></section>;
 }
 
 function LegacyChart({result}:{result:CalculationResult}){
