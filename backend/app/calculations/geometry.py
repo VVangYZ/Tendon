@@ -255,22 +255,30 @@ class Profile:
         return self.segments[-1].x_end
 
     def _segment_at(self, x: float) -> Segment:
-        if not self.x_start <= x <= self.x_end:
+        tolerance = 1e-9
+        if not self.x_start - tolerance <= x <= self.x_end + tolerance:
             raise GeometryError("查询里程超出线形范围")
+        x = min(max(x, self.x_start), self.x_end)
         for segment in self.segments:
             if segment.x_start <= x < segment.x_end:
                 return segment
         return self.segments[-1]
 
     def point_at(self, x: float) -> Point2D:
+        x = min(max(x, self.x_start), self.x_end)
         return self._segment_at(x).point_at(x)
 
     def tangent_at(self, x: float) -> Point2D:
+        x = min(max(x, self.x_start), self.x_end)
         return self._segment_at(x).tangent_at(x)
 
     def breakpoints_between(self, x1: float, x2: float) -> List[float]:
-        if not self.x_start <= x1 <= x2 <= self.x_end:
+        tolerance = 1e-9
+        if not self.x_start - tolerance <= x1 <= x2 <= self.x_end + tolerance:
             raise GeometryError("截取里程超出线形范围")
+        # 等分计算会带来极小的浮点舍入误差，边界内的误差应收敛到实际端点。
+        x1 = min(max(x1, self.x_start), self.x_end)
+        x2 = min(max(x2, self.x_start), self.x_end)
         return [x1] + [segment.x_end for segment in self.segments[:-1] if x1 < segment.x_end < x2] + [x2]
 
 
