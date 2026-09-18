@@ -20,6 +20,21 @@ class ProfileInput(BaseModel):
     points: list[ProfilePointInput] = Field(min_length=2)
 
 
+class ImportedProfileOutput(BaseModel):
+    """DXF 导入的一条 x/y/b 线形。"""
+
+    mode: Literal["xyb"] = "xyb"
+    points: list[ProfilePointInput]
+
+
+class DxfImportResponse(BaseModel):
+    """DXF 文件导入后返回的平面与立面线形。"""
+
+    elevation: ImportedProfileOutput
+    plan: ImportedProfileOutput
+    unit: Literal["m", "mm"]
+
+
 class CalculationRequest(BaseModel):
     """单根钢束计算请求。"""
 

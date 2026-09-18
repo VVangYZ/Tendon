@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.calculation import router as calculation_router
+from app.api.dxf_import import router as dxf_import_router
 
 
 app = FastAPI(title="Tendon MVP", version="0.1.0")
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(calculation_router)
+app.include_router(dxf_import_router)
 
 
 @app.get("/health")
