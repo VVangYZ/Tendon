@@ -1,0 +1,15 @@
+/* 批量结果表：序号窄列，其余列等宽，避免按内容自动伸缩。 */
+.panel table.batch-table {
+  table-layout: fixed;
+}
+
+.panel table.batch-table th:first-child,
+.panel table.batch-table td:first-child {
+  width: 6%;
+}
+
+/* 线形表与面板边缘留出呼吸空间。 */
+.panel > table.sheet {
+  width: calc(100% - 24px);
+  margin-inline: 12px;
+}
