@@ -1,10 +1,13 @@
 """多根钢束 Excel 导入、批量计算与导出接口。"""
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from typing import Literal
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import BatchCalculationRequest, BatchExportRequest, BatchImportResponse
 from app.services.batch_excel import BatchExcelError, calculate_project, create_template, export_project, import_project
+from app.services.batch_dxf import BatchDxfImportError, import_batch_dxf
 
 
 router = APIRouter(prefix="/api/batch", tags=["批量计算"])
@@ -29,6 +32,24 @@ async def import_excel(file: UploadFile = File(...)) -> BatchImportResponse:
         await file.close()
     ready_count = sum(tendon.status == "ready" for tendon in project.tendons)
     return BatchImportResponse(project=project, ready_count=ready_count, invalid_count=len(project.tendons) - ready_count)
+
+
+@router.post("/import/dxf", response_model=BatchImportResponse)
+async def import_dxf(
+    file: UploadFile = File(...),
+    unit: Literal["m", "mm"] = Query(default="m"),
+    label_tolerance: float = Query(default=0.05, gt=0),
+) -> BatchImportResponse:
+    """按固定图层和左端编号文字导入多根钢束。"""
+    if not file.filename or not file.filename.lower().endswith(".dxf"):
+        raise HTTPException(status_code=422, detail="仅支持 .dxf 文件")
+    try:
+        project = import_batch_dxf(await file.read(), unit, label_tolerance)
+    except BatchDxfImportError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    finally:
+        await file.close()
+    return BatchImportResponse(project=project, ready_count=len(project.tendons), invalid_count=0)
 
 
 @router.post("/calculate")

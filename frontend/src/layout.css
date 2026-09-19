@@ -29,3 +29,21 @@
 .compact-profile .sheet td:first-child {
   width: 8%;
 }
+
+/* 批量 DXF 导入参数保持紧凑，避免挤占文件选择按钮。 */
+.batch-actions .dxf-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #53666d;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.batch-actions .dxf-option select {
+  width: 58px;
+}
+
+.batch-actions .dxf-option input {
+  width: 60px;
+}
