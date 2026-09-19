@@ -225,6 +225,13 @@ def _resolve_profiles(elevation_id: str, plan_id: str, elevations: dict[str, Pro
         plan = _straight_profile(elevation)
     if abs(elevation.points[0].x - plan.points[0].x) > TOLERANCE_M or abs(elevation.points[-1].x - plan.points[-1].x) > TOLERANCE_M:
         raise BatchExcelError("平面与立面的首尾 x 坐标不一致")
+    # 通过 1 mm 校核的端点可能仍有微小浮点或制图偏差；计算内核要求完全相等。
+    elevation = elevation.model_copy(deep=True)
+    plan = plan.model_copy(deep=True)
+    start = (elevation.points[0].x + plan.points[0].x) / 2
+    end = (elevation.points[-1].x + plan.points[-1].x) / 2
+    elevation.points[0].x = plan.points[0].x = start
+    elevation.points[-1].x = plan.points[-1].x = end
     return elevation, plan
 
 

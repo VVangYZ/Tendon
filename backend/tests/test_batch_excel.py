@@ -34,3 +34,19 @@ class BatchExcelTest(unittest.TestCase):
         self.assertEqual(plan.points[0].x, 0)
         self.assertEqual(plan.points[-1].x, 75)
         self.assertTrue(all(point.y == 0 for point in plan.points))
+
+    def test_sub_millimetre_endpoint_difference_is_aligned_for_calculation(self) -> None:
+        """通过 1 mm 校核的端点偏差应在计算前统一为共同里程。"""
+        workbook = load_workbook(BytesIO(create_template()))
+        workbook["平面线形"].cell(2, 2).value = 0.0005
+        workbook["平面线形"].cell(3, 2).value = 75.0005
+        stream = BytesIO()
+        workbook.save(stream)
+
+        project = import_project(stream.getvalue())
+        tendon = project.tendons[0]
+        calculation = calculate_project(project)
+
+        self.assertEqual(tendon.elevation.points[0].x, tendon.plan.points[0].x)
+        self.assertEqual(tendon.elevation.points[-1].x, tendon.plan.points[-1].x)
+        self.assertEqual(calculation.success_count, 1)
