@@ -17,5 +17,15 @@
 /* 只读线形表继承了零单元格内边距，给末列补足右侧空间。 */
 .compact-profile .sheet th:last-child,
 .compact-profile .sheet td:last-child {
-  padding-right: 16px;
+  padding-right: 6px;
+}
+
+/* 序号列较窄，三列线形数据等宽。 */
+.compact-profile .sheet {
+  table-layout: fixed;
+}
+
+.compact-profile .sheet th:first-child,
+.compact-profile .sheet td:first-child {
+  width: 8%;
 }
