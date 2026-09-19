@@ -47,3 +47,14 @@
 .batch-actions .dxf-option input {
   width: 60px;
 }
+
+/* 容差为固定内部校核值，不在界面暴露。DXF 选项以分隔线与 Excel 导入区分。 */
+.batch-actions .dxf-option + .dxf-option {
+  display: none;
+}
+
+.batch-actions .import-file + .dxf-option {
+  margin-left: 4px;
+  padding-left: 16px;
+  border-left: 1px solid #d8e4e6;
+}
