@@ -80,3 +80,85 @@ class CalculationResponse(BaseModel):
     balance_x: Optional[float]
     distribution: list[DistributionPoint]
     segments: list[SegmentOutput]
+
+
+class NamedProfile(BaseModel):
+    """供多根钢束复用的一条 x/y/b 线形。"""
+
+    id: str
+    points: list[ProfilePointInput] = Field(min_length=2)
+
+
+class BatchDefaults(BaseModel):
+    """批量导入工作簿提供的统一默认参数。"""
+
+    unit: Literal["m", "mm"] = "m"
+    k: float = Field(default=0.0015, ge=0)
+    mu: float = Field(default=0.25, ge=0)
+    elastic_modulus: float = Field(default=195000.0, gt=0)
+    left_stress: float = Field(default=1395.0, ge=0)
+    right_stress: float = Field(default=1395.0, ge=0)
+
+
+class BatchTendon(BaseModel):
+    """一根批量钢束的引用、解析参数与校核结果。"""
+
+    id: str
+    elevation_id: str
+    plan_id: str
+    left_stress: float = Field(ge=0)
+    right_stress: float = Field(ge=0)
+    k: float = Field(ge=0)
+    mu: float = Field(ge=0)
+    elastic_modulus: float = Field(gt=0)
+    elevation: Optional[ProfileInput] = None
+    plan: Optional[ProfileInput] = None
+    status: Literal["ready", "invalid"] = "ready"
+    error: Optional[str] = None
+
+
+class BatchProject(BaseModel):
+    """Excel 导入后保留在前端会话中的批量工程数据。"""
+
+    defaults: BatchDefaults
+    elevation_profiles: list[NamedProfile] = []
+    plan_profiles: list[NamedProfile] = []
+    tendons: list[BatchTendon]
+
+
+class BatchImportResponse(BaseModel):
+    """批量 Excel 导入及逐束校核结果。"""
+
+    project: BatchProject
+    ready_count: int
+    invalid_count: int
+
+
+class BatchCalculationItem(BaseModel):
+    """一根钢束的批量计算状态与结果。"""
+
+    id: str
+    status: Literal["success", "failed", "skipped"]
+    error: Optional[str] = None
+    result: Optional[CalculationResponse] = None
+
+
+class BatchCalculationRequest(BaseModel):
+    """请求对已导入项目执行批量计算。"""
+
+    project: BatchProject
+
+
+class BatchCalculationResponse(BaseModel):
+    """批量计算的逐束结果。"""
+
+    items: list[BatchCalculationItem]
+    success_count: int
+    failed_count: int
+
+
+class BatchExportRequest(BaseModel):
+    """将导入数据与计算结果导出为新的工作簿。"""
+
+    project: BatchProject
+    calculation: BatchCalculationResponse
