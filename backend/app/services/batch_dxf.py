@@ -97,8 +97,9 @@ def _read_labels(modelspace, scale: float) -> dict[str, list[tuple[float, float]
         tendon_id = str(entity.dxf.text).strip()
         if not tendon_id:
             raise BatchDxfImportError("图层“钢束编号”存在空白文字")
-        insert = entity.dxf.insert
-        labels.setdefault(tendon_id, []).append((float(insert.x) * scale, float(insert.y) * scale))
+        # TEXT 的 insert 对左对齐文字是插入点，但右对齐等文字应以实际对齐点为准。
+        _, alignment_point, _ = entity.get_placement()
+        labels.setdefault(tendon_id, []).append((float(alignment_point.x) * scale, float(alignment_point.y) * scale))
     if not labels:
         raise BatchDxfImportError("图层“钢束编号”未找到单行文字 TEXT")
     return labels

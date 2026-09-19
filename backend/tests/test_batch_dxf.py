@@ -4,6 +4,7 @@ import unittest
 from io import StringIO
 
 import ezdxf
+from ezdxf.enums import TextEntityAlignment
 
 from app.services.batch_dxf import BatchDxfImportError, import_batch_dxf
 
@@ -46,3 +47,19 @@ class BatchDxfImportTest(unittest.TestCase):
 
         with self.assertRaisesRegex(BatchDxfImportError, "未匹配到"):
             import_batch_dxf(stream.getvalue().encode("utf-8"), "m", 0.05)
+
+    def test_import_uses_text_alignment_point(self) -> None:
+        """右对齐文字应以对齐点而不是左侧插入点匹配线形首点。"""
+        document = ezdxf.new("R2010")
+        modelspace = document.modelspace()
+        modelspace.add_lwpolyline([(0, 0), (10, 0)], dxfattribs={"layer": "立面"})
+        modelspace.add_lwpolyline([(0, 1), (10, 1)], dxfattribs={"layer": "平面"})
+        for point in [(0, 0), (0, 1)]:
+            label = modelspace.add_text("T1", dxfattribs={"layer": "钢束编号"})
+            label.set_placement(point, align=TextEntityAlignment.RIGHT)
+        stream = StringIO()
+        document.write(stream)
+
+        project = import_batch_dxf(stream.getvalue().encode("utf-8"), "m", 0.05)
+
+        self.assertEqual([tendon.id for tendon in project.tendons], ["T1"])
