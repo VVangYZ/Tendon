@@ -1,8 +1,9 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import Chart from "./Chart";
 import type { BatchCalculationResponse, BatchImportResponse, BatchTendon, CalculationResult, ProfileInput } from "./types";
+import { apiUrl } from "./api";
 
-const api = "http://localhost:8000/api/batch";
+const api = apiUrl("/api/batch");
 const fmt = (value: number | null | undefined, digits = 3) => value === null || value === undefined ? "—" : value.toFixed(digits);
 
 function ProfileView({ title, profile }: { title: string; profile: ProfileInput | null }) {

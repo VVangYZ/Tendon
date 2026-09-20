@@ -17,3 +17,8 @@ build/
 frontend/node_modules/
 frontend/dist/
 *.tsbuildinfo
+
+# 本地部署配置与密钥
+.env
+.env.*
+!.env.example
