@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from app.models.schemas import BatchCalculationRequest, BatchExportRequest, BatchImportResponse
 from app.services.batch_excel import BatchExcelError, calculate_project, create_template, export_project, import_project
 from app.services.batch_dxf import BatchDxfImportError, import_batch_dxf
+from app.api.uploads import read_limited_upload
 
 
 router = APIRouter(prefix="/api/batch", tags=["批量计算"])
@@ -25,7 +26,7 @@ async def import_excel(file: UploadFile = File(...)) -> BatchImportResponse:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=422, detail="仅支持 .xlsx 文件")
     try:
-        project = import_project(await file.read())
+        project = import_project(await read_limited_upload(file))
     except BatchExcelError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     finally:
@@ -44,7 +45,7 @@ async def import_dxf(
     if not file.filename or not file.filename.lower().endswith(".dxf"):
         raise HTTPException(status_code=422, detail="仅支持 .dxf 文件")
     try:
-        project = import_batch_dxf(await file.read(), unit, label_tolerance)
+        project = import_batch_dxf(await read_limited_upload(file), unit, label_tolerance)
     except BatchDxfImportError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     finally:

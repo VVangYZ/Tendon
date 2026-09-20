@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from app.models.schemas import DxfImportResponse, ImportedProfileOutput, ProfilePointInput
 from app.services.dxf_import import DxfImportError, import_dxf_profiles
+from app.api.uploads import read_limited_upload
 
 
 router = APIRouter(prefix="/api", tags=["DXF 导入"])
@@ -20,7 +21,7 @@ async def import_dxf(
     if not file.filename or not file.filename.lower().endswith(".dxf"):
         raise HTTPException(status_code=422, detail="仅支持 .dxf 文件")
     try:
-        result = import_dxf_profiles(await file.read(), unit)
+        result = import_dxf_profiles(await read_limited_upload(file), unit)
     except DxfImportError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     finally:

@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent, type ClipboardEvent, type MouseE
 import type { CalculationResult, DxfImportResponse, ProfileInput } from "./types";
 import Chart from "./Chart";
 import { rememberProfile } from "./chartProfiles";
-import { apiUrl } from "./api";
+import { apiUrl, uploadSizeError } from "./api";
 
 const elevation: ProfileInput={mode:"xyr",points:[[0,0,0],[5.191,-1.294,10],[27.647,-1.294,10],[32.273,-.141,10],[42.729,-.141,10],[47.355,-1.294,10],[69.811,-1.294,10],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
 const plan: ProfileInput={mode:"xyr",points:[[0,0,0],[25,3.4613,100],[75,0,0]].map(([x,y,value])=>({x,y,value}))};
@@ -57,6 +57,8 @@ function DxfImportControl({onImported}:{onImported:(elevation:ProfileInput,plan:
   const file=event.target.files?.[0];
   event.target.value="";
   if(!file)return;
+  const sizeError=uploadSizeError(file);
+  if(sizeError){setMessage(sizeError);return;}
   setBusy(true);setMessage("");
   try{
    const form=new FormData();form.append("file",file);
@@ -68,7 +70,7 @@ function DxfImportControl({onImported}:{onImported:(elevation:ProfileInput,plan:
    setMessage(`导入完成：立面 ${result.elevation.points.length} 个节点，平面 ${result.plan.points.length} 个节点。`);
   }catch(error){setMessage(error instanceof Error?error.message:"DXF 导入失败")}finally{setBusy(false)}
  };
- return <div className="dxf-import"><div><strong>DXF 导入</strong><small>仅读取“立面”和“平面”图层；每层须且仅须一条开放二维多段线。</small></div><label>图纸单位<select value={unit} onChange={event=>setUnit(event.target.value as "m"|"mm")}><option value="m">m</option><option value="mm">mm</option></select></label><label className="primary import-file">{busy?"导入中…":"导入 DXF"}<input type="file" accept=".dxf" disabled={busy} onChange={upload}/></label>{message&&<small className={message.startsWith("导入完成")?"import-success":"import-error"}>{message}</small>}</div>;
+ return <div className="dxf-import"><div><strong>DXF 导入</strong><small>仅读取“立面”和“平面”图层；每层须且仅须一条开放二维多段线，文件最大 5 MB。</small></div><label>图纸单位<select value={unit} onChange={event=>setUnit(event.target.value as "m"|"mm")}><option value="m">m</option><option value="mm">mm</option></select></label><label className="primary import-file">{busy?"导入中…":"导入 DXF"}<input type="file" accept=".dxf" disabled={busy} onChange={upload}/></label>{message&&<small className={message.startsWith("导入完成")?"import-success":"import-error"}>{message}</small>}</div>;
 }
 
 function LegacyChart({result}:{result:CalculationResult}){
