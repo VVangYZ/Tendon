@@ -39,3 +39,14 @@ Render 免费服务在 15 分钟没有入站请求后会休眠；下一次 API �
 当前应用没有账号和鉴权。公开 Pages 地址意味着任何访问者均可调用 API 并上传允许类型的文件；请勿将敏感工程资料上传到测试站。若仅面向受邀试用者，应先增加访问保护与上传大小限制。
 
 公测环境的 DXF 与 Excel 单个上传文件上限为 5 MB。前端会在选择文件时提示，后端也会强制拒绝超出上限的请求并返回 HTTP 413。
+
+## 5. 当前公测实例
+
+截至 2026-09-20，已完成首次部署：
+
+| 服务 | 公网地址 | 用途 |
+| --- | --- | --- |
+| Cloudflare Pages | `https://tendon-3ik.pages.dev` | React/Vite 前端与网页访问统计 |
+| Render | `https://tendon-api.onrender.com` | FastAPI 计算、DXF/Excel 导入与导出 |
+
+当前部署已配置 `VITE_API_BASE_URL=https://tendon-api.onrender.com` 与 `CORS_ORIGINS=https://tendon-3ik.pages.dev`。Cloudflare Web Analytics 已启用，重新部署后会注入统计脚本；访问数据通常需要数分钟出现。
